@@ -40,7 +40,7 @@ void setup() {
 
   //initialize the stepper motor with speed 40RPMS
   AFMS.begin();
-  myMotor->setSpeed(40); 
+  myMotor->setSpeed(20); 
 }
 
 void loop() {
@@ -70,17 +70,23 @@ void loop() {
     //turn stepper motor 90 degrees
     myMotor->step(50, BACKWARD, DOUBLE);
     pitchCount++;
-
-    //loop through to check button press
-    for(int i=0; i<20; i++){
-      delay(delayTime/20);
-      if(digitalRead(BUTTON_PIN) == LOW){
-        active = false;
-        Serial.println("Button press inside active!");
-        break;
-      }
+    
+    if(pitchCount == MAX_PITCHES){
+      active = false;
+      pitchCount = 0;
     }
 
+    else{
+      //loop through to check button press
+      for(int i=0; i<20; i++){
+        delay(delayTime/20);
+        if(digitalRead(BUTTON_PIN) == LOW){
+          active = false;
+          Serial.println("Button press inside active!");
+          break;
+        }
+      }
+    }
   }
 
   Serial.println();
