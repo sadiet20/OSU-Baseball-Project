@@ -1,20 +1,41 @@
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+#include <avr/power.h> // Required for 16 MHz Adafruit Trinket
+#endif
+
 //button data
 #define BUTTON_PIN 2
+#define REMOTE_PIN 3
 
 //time since button was last pressed
-int button_pressed = 0;
+unsigned long button_pressed = 0;
 
 //potentiometer data
 #define POT_PIN 0
-int potVal = 0;
+long potVal = 0;
 
-//create stepper motor with 200 steps per revolution on port 1
+//light variables
+
+//digital pin on the Arduino that is connected to the NeoPixels
+#define LED_PIN 15
+
+//how many NeoPixels are attached to the Arduino
+#define NUM_PIXELS 8
+
+const float MS_BETWEEN_LED = 5000/NUM_PIXELS;
+float msBeforeLed = 0;
+
+#define BRIGHT 20
+
+Adafruit_NeoPixel pixels(NUM_PIXELS, LED_PIN);
+
+//create stepper motor with 200 steps per revolution on port 2
 //M1 and M2 go to port 1, M3 and M4 go to port 2
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 1);
+Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 2);
 
 //number of baseballs the device holds
 #define MAX_PITCHES 10
@@ -23,7 +44,7 @@ Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 1);
 int pitchCount = 0;
 
 //time in between pitches
-int delayTime = 0;
+long delayTime = 0;
 
 //time to wait before starting pitching
 #define STARTING_DELAY 0    //30*1000;
@@ -40,13 +61,20 @@ void setup() {
   //setup input button
   //high==on==pressed low==off==not pressed
   pinMode(BUTTON_PIN, INPUT);
-
+  //pinMode(REMOTE_PIN, INPUT);
+  
   //setup interrupt to toggle 'active' variable if the button is pressed
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, FALLING);
-
+  attachInterrupt(digitalPinToInterrupt(REMOTE_PIN), remotePress, RISING);
+  
   //initialize the stepper motor with speed 40RPMS
   AFMS.begin();
   myMotor->setSpeed(20); 
+
+  //initilize NeoPixel strip object
+  pixels.begin();
+  pixels.clear();
+  pixels.show();
 }
 
 void loop() {
@@ -57,27 +85,67 @@ void loop() {
 
   //calculate the delay time to be between 5 and 10 seconds (depending on where the potentiometer is set)
   delayTime = potVal*(1000)/51 + 5000;
+
+  //LED animation starts with 5 seconds remaining until pitch
+  msBeforeLed = delayTime - 5000;
   
   //turn stepper motor maxPitches times (or until the off button is pressed)
   if (active == true && pitchCount!=MAX_PITCHES)
   {
+    //delay before first pitch and set LEDs to red
     if(pitchCount == 0){
       delay(STARTING_DELAY);
+      pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
+      pixels.show();
     }
 
-    //turn stepper motor 90 degrees
-    myMotor->step(50, BACKWARD, DOUBLE);
-    pitchCount++;
+    //delay before the 5-second animation
+    delay(msBeforeLed);
+
+    //5-second animation for timing
+    for(int i=0; i<NUM_PIXELS; i++){
+      pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
+      pixels.show();
+      if(false == active){
+        Serial.println("HEREEREREEE");
+        break;
+      }
+      delay(MS_BETWEEN_LED);
+    }
+
     
+    Serial.println();
+    Serial.print("active: ");
+    Serial.println(active);
+    Serial.println();
+    
+    
+    //turn stepper motor 90 degrees
+    if(true == active){
+      //flash green right as we are pitching
+      pixels.fill(pixels.Color(0, BRIGHT, 0), 0);
+      pixels.show();
+      
+      myMotor->step(50, BACKWARD, DOUBLE);
+      pitchCount++;
+    }
+
+    //if done, reset variables
     if(pitchCount == MAX_PITCHES){
       active = false;
       pitchCount = 0;
     }
-    else{
-      delay(delayTime);
-    }
+
+    //refill with red
+    pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
+    pixels.show();
+  }
+  else{
+    pixels.clear();
+    pixels.show();
   }
 
+/*
   Serial.println();
   Serial.print("potVal: ");
   Serial.println(potVal);
@@ -89,6 +157,7 @@ void loop() {
   Serial.println(pitchCount);
   Serial.print("button: ");
   Serial.println(digitalRead(BUTTON_PIN));
+*/
 }
 
 
@@ -104,17 +173,13 @@ void buttonPress(){
   active = !active;
   if(true == active){
     pitchCount = 0;
+    pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);    //sets all pixels to red
+    pixels.show();
   }
 }
 
 
-/*
-Lights
-- red when active
-- yellow bar filling to indicate timing
-  - all full, servo moves
-  - ratio for timing
-      - how many LEDs in strip
-- flash green right before moving
-
-*/
+void remotePress(){
+  Serial.println("Remote signal detected");
+  buttonPress();
+}
