@@ -4,6 +4,9 @@
 //button data
 #define BUTTON_PIN 2
 
+//time since button was last pressed
+int button_pressed = 0;
+
 //potentiometer data
 #define POT_PIN 0
 int potVal = 0;
@@ -38,6 +41,9 @@ void setup() {
   //high==on==pressed low==off==not pressed
   pinMode(BUTTON_PIN, INPUT);
 
+  //setup interrupt to toggle 'active' variable if the button is pressed
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, FALLING);
+
   //initialize the stepper motor with speed 40RPMS
   AFMS.begin();
   myMotor->setSpeed(20); 
@@ -51,13 +57,6 @@ void loop() {
 
   //calculate the delay time to be between 5 and 10 seconds (depending on where the potentiometer is set)
   delayTime = potVal*(1000)/51 + 5000;
-
-  if(digitalRead(BUTTON_PIN) == LOW){
-    active = !active;
-    Serial.println("Button press!");
-    Serial.print("Active: ");
-    Serial.println(active);
-  }
   
   //turn stepper motor maxPitches times (or until the off button is pressed)
   if (active == true && pitchCount!=MAX_PITCHES)
@@ -65,7 +64,6 @@ void loop() {
     if(pitchCount == 0){
       delay(STARTING_DELAY);
     }
-
 
     //turn stepper motor 90 degrees
     myMotor->step(50, BACKWARD, DOUBLE);
@@ -75,17 +73,8 @@ void loop() {
       active = false;
       pitchCount = 0;
     }
-
     else{
-      //loop through to check button press
-      for(int i=0; i<20; i++){
-        delay(delayTime/20);
-        if(digitalRead(BUTTON_PIN) == LOW){
-          active = false;
-          Serial.println("Button press inside active!");
-          break;
-        }
-      }
+      delay(delayTime);
     }
   }
 
@@ -100,6 +89,22 @@ void loop() {
   Serial.println(pitchCount);
   Serial.print("button: ");
   Serial.println(digitalRead(BUTTON_PIN));
+}
+
+
+//if the button is pressed, toggle the active variable
+//if turning on, reset pitchCount
+void buttonPress(){
+  //ignore interrupt if the button was pressed within the last half second
+  if(millis() - button_pressed < 500){
+    return;
+  }
+  button_pressed = millis();
+  Serial.println("Button has been pressed.");
+  active = !active;
+  if(true == active){
+    pitchCount = 0;
+  }
 }
 
 
