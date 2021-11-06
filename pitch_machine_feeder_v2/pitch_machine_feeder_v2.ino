@@ -107,7 +107,7 @@ void loop() {
       pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
       pixels.show();
       if(false == active){
-        Serial.println("HEREEREREEE");
+        Serial.println("WHY IS THIS NOT EXECUTING");
         break;
       }
       delay(MS_BETWEEN_LED);
@@ -183,3 +183,15 @@ void remotePress(){
   Serial.println("Remote signal detected");
   buttonPress();
 }
+
+/*
+ * Future tasks
+ *  - add release() after each movement to catch the next baseball?
+ *  - figure out why active isn't getting updated in real time (not leaving the animation and sometimes pitching one too many times)
+ *  - how long should the starting delay be?
+ *  - why is the remote control not always being detected?
+ *  - add fan
+ *  - add capability for the users to set number of pitches?
+ *  - improve animation?
+ * /
+ */
