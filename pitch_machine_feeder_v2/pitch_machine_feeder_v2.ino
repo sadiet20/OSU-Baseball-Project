@@ -11,7 +11,8 @@
 #define REMOTE_PIN 3
 
 //time since button was last pressed
-unsigned long button_pressed = 0;
+//used volatile so that we can edit it within an interrupt
+volatile unsigned long button_pressed = 0;
 
 //potentiometer data
 #define POT_PIN 0
@@ -50,7 +51,8 @@ long delayTime = 0;
 #define STARTING_DELAY 0    //30*1000;
 
 //currently throwing pitches
-bool active = false;
+//must be volatile so that it can be altered inside interrupt
+volatile bool active = false;
 
 
 void setup() {
@@ -61,7 +63,7 @@ void setup() {
   //setup input button
   //high==on==pressed low==off==not pressed
   pinMode(BUTTON_PIN, INPUT);
-  //pinMode(REMOTE_PIN, INPUT);
+  pinMode(REMOTE_PIN, INPUT);
   
   //setup interrupt to toggle 'active' variable if the button is pressed
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, FALLING);
@@ -94,9 +96,14 @@ void loop() {
   {
     //delay before first pitch and set LEDs to red
     if(pitchCount == 0){
-      delay(STARTING_DELAY);
       pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
       pixels.show();
+      for(int i=0; i<100; i++){
+        if(false == active){
+          break;
+        }
+        delay(STARTING_DELAY/100);
+      }
     }
 
     //delay before the 5-second animation
@@ -104,12 +111,11 @@ void loop() {
 
     //5-second animation for timing
     for(int i=0; i<NUM_PIXELS; i++){
-      pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
-      pixels.show();
       if(false == active){
-        Serial.println("WHY IS THIS NOT EXECUTING");
         break;
       }
+      pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
+      pixels.show();
       delay(MS_BETWEEN_LED);
     }
 
@@ -172,6 +178,7 @@ void buttonPress(){
   Serial.println("Button has been pressed.");
   active = !active;
   if(true == active){
+    //srt all of these should move somewhere else
     pitchCount = 0;
     pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);    //sets all pixels to red
     pixels.show();
@@ -187,11 +194,16 @@ void remotePress(){
 /*
  * Future tasks
  *  - add release() after each movement to catch the next baseball?
- *  - figure out why active isn't getting updated in real time (not leaving the animation and sometimes pitching one too many times)
- *  - how long should the starting delay be?
+ *  - mess around with stepper motor speed (slower may catch a new baseball better)
+ *  - DONE: figure out why active isn't getting updated in real time (not leaving the animation and sometimes pitching one too many times) -- needed to make active volatile
  *  - why is the remote control not always being detected?
  *  - add fan
- *  - add capability for the users to set number of pitches?
+ *  - add a power switch
+ *  
+ *  - how long should the starting delay be?
+ *  - add capability for the users to set number of pitches? - don't worry about that for now
  *  - improve animation?
+ *  - how bright do we want the light to be
+ *  - restructure code so that we can return from pitching functions early when active is set to false
  * /
  */
