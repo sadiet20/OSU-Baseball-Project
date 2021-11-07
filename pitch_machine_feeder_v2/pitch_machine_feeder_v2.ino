@@ -6,6 +6,17 @@
 #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
 
+
+//FUNCTION PROTOTYPES
+
+bool pitching();
+bool timingAnimation();
+void buttonPress();
+void remotePress();
+
+
+//VARIABLES
+
 //button data
 #define BUTTON_PIN 2
 #define REMOTE_PIN 3
@@ -29,9 +40,11 @@ long potVal = 0;
 const float MS_BETWEEN_LED = 5000/NUM_PIXELS;
 float msBeforeLed = 0;
 
+//brightness level of LED's (between 0 and 255)
 #define BRIGHT 20
 
 Adafruit_NeoPixel pixels(NUM_PIXELS, LED_PIN);
+
 
 //create stepper motor with 200 steps per revolution on port 2
 //M1 and M2 go to port 1, M3 and M4 go to port 2
@@ -69,7 +82,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, FALLING);
   attachInterrupt(digitalPinToInterrupt(REMOTE_PIN), remotePress, RISING);
   
-  //initialize the stepper motor with speed 40RPMS
+  //initialize the stepper motor with speed 20RPMS
   AFMS.begin();
   myMotor->setSpeed(20); 
 
@@ -92,61 +105,13 @@ void loop() {
   msBeforeLed = delayTime - 5000;
   
   //turn stepper motor maxPitches times (or until the off button is pressed)
-  if (active == true && pitchCount!=MAX_PITCHES)
-  {
-    //delay before first pitch and set LEDs to red
-    if(pitchCount == 0){
-      pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
-      pixels.show();
-      for(int i=0; i<100; i++){
-        if(false == active){
-          break;
-        }
-        delay(STARTING_DELAY/100);
-      }
-    }
-
-    //delay before the 5-second animation
-    delay(msBeforeLed);
-
-    //5-second animation for timing
-    for(int i=0; i<NUM_PIXELS; i++){
-      if(false == active){
-        break;
-      }
-      pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
-      pixels.show();
-      delay(MS_BETWEEN_LED);
-    }
-
-    
-    Serial.println();
-    Serial.print("active: ");
-    Serial.println(active);
-    Serial.println();
-    
-    
-    //turn stepper motor 90 degrees
-    if(true == active){
-      //flash green right as we are pitching
-      pixels.fill(pixels.Color(0, BRIGHT, 0), 0);
-      pixels.show();
-      
-      myMotor->step(50, BACKWARD, DOUBLE);
-      pitchCount++;
-    }
-
-    //if done, reset variables
-    if(pitchCount == MAX_PITCHES){
-      active = false;
-      pitchCount = 0;
-    }
-
-    //refill with red
-    pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
-    pixels.show();
+  if (active == true && pitchCount!=MAX_PITCHES){
+    active = pitching();
   }
-  else{
+
+  //clear lights and reset count if not pitching
+  if(false == active){
+    pitchCount = 0;
     pixels.clear();
     pixels.show();
   }
@@ -167,22 +132,89 @@ void loop() {
 }
 
 
+//executes one pitch with lights
+//if at any point 'active' changes to false, immediately returns false
+//if successful execution and not the last pitch, returns true
+bool pitching(){
+  bool cont;
+  
+  //delay before first pitch and set LEDs to red
+  if(pitchCount == 0){
+    pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
+    pixels.show();
+    for(int i=0; i<100; i++){
+      if(false == active){
+        return false;
+      }
+      delay(STARTING_DELAY/100);
+    }
+  }
+
+  //delay before the 5-second animation
+  for(int i=0; i<50; i++){
+    if(false == active){
+      return false;
+    }
+    delay(msBeforeLed/50);
+  }
+
+  //run light animation for the 5 seconds before pitching
+  cont = timingAnimation();
+
+  if(false == cont){
+    return false;
+  }
+
+  //check again to make sure we haven't pressed the button
+  if(false == active){
+    return false;
+  }
+
+  //flash green right as we are pitching
+  pixels.fill(pixels.Color(0, BRIGHT, 0), 0);
+  pixels.show();
+  
+  //turn stepper motor 90 degrees
+  myMotor->step(50, BACKWARD, DOUBLE);
+  pitchCount++;
+
+  //if done, change to inactive
+  if(pitchCount == MAX_PITCHES){
+    active = false;
+  }
+
+  //refill with red
+  pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
+  pixels.show();
+
+  return active;
+}
+
+
+//5-second animation for timing
+//returns false if active goes to false or true if active stays true the entire time
+bool timingAnimation(){
+  for(int i=0; i<NUM_PIXELS; i++){
+    if(false == active){
+      return false;
+    }
+    pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
+    pixels.show();
+    delay(MS_BETWEEN_LED);
+  }
+  return true;
+}
+
+
 //if the button is pressed, toggle the active variable
-//if turning on, reset pitchCount
 void buttonPress(){
-  //ignore interrupt if the button was pressed within the last half second
+  //ignore interrupt if the button was pressed within the last half second (ignore double signals)
   if(millis() - button_pressed < 500){
     return;
   }
   button_pressed = millis();
   Serial.println("Button has been pressed.");
   active = !active;
-  if(true == active){
-    //srt all of these should move somewhere else
-    pitchCount = 0;
-    pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);    //sets all pixels to red
-    pixels.show();
-  }
 }
 
 
@@ -195,8 +227,7 @@ void remotePress(){
  * Future tasks
  *  - add release() after each movement to catch the next baseball?
  *  - mess around with stepper motor speed (slower may catch a new baseball better)
- *  - DONE: figure out why active isn't getting updated in real time (not leaving the animation and sometimes pitching one too many times) -- needed to make active volatile
- *  - why is the remote control not always being detected?
+ *  - why is the remote control not always being detected? -- probably need remote with higher range (currently only 25 feet)
  *  - add fan
  *  - add a power switch
  *  
@@ -204,6 +235,6 @@ void remotePress(){
  *  - add capability for the users to set number of pitches? - don't worry about that for now
  *  - improve animation?
  *  - how bright do we want the light to be
- *  - restructure code so that we can return from pitching functions early when active is set to false
+ *  - add startup light show
  * /
  */
