@@ -9,10 +9,12 @@
 
 //FUNCTION PROTOTYPES
 
+void calibrate();
 bool pitching();
 bool timingAnimation();
 void buttonPress();
 void remotePress();
+void activate();
 
 
 //VARIABLES
@@ -24,6 +26,10 @@ void remotePress();
 //time since button was last pressed
 //used volatile so that we can edit it within an interrupt
 volatile unsigned long button_pressed = 0;
+
+//if the machine is being calibrated
+//volatile so it can be changed inside interrupt
+volatile bool first_press = true;
 
 //potentiometer data
 #define POT_PIN 0
@@ -84,28 +90,36 @@ void setup() {
   
   //initialize the stepper motor with speed 20RPMS
   AFMS.begin();
-  myMotor->setSpeed(20); 
+  //myMotor->setSpeed(100); check if this is the max speed?
+  //myMotor->step(25, FORWARD, DOUBLE);
+  myMotor->setSpeed(20);
 
   //initilize NeoPixel strip object
   pixels.begin();
   pixels.clear();
   pixels.show();
+
+  //wait for user to calibrate stepper motor position
+  calibrate();
 }
 
 void loop() {
-  //read potentiometer value
-  //convert analog (0-1023) to digital (0-255)
-  potVal = analogRead(POT_PIN);
-  potVal = map(potVal, 0, 1023, 0, 255);
 
-  //calculate the delay time to be between 5 and 10 seconds (depending on where the potentiometer is set)
-  delayTime = potVal*(1000)/51 + 5000;
-
-  //LED animation starts with 5 seconds remaining until pitch
-  msBeforeLed = delayTime - 5000;
-  
   //turn stepper motor maxPitches times (or until the off button is pressed)
   if (active == true && pitchCount!=MAX_PITCHES){
+    
+    //read potentiometer value
+    potVal = analogRead(POT_PIN);
+    //convert analog (0-1023) to digital (0-255)
+    potVal = map(potVal, 0, 1023, 0, 255);
+  
+    //calculate the delay time to be between 5 and 10 seconds (depending on where the potentiometer is set)
+    delayTime = potVal*(1000)/51 + 5000;
+  
+    //LED animation starts with 5 seconds remaining until pitch
+    msBeforeLed = delayTime - 5000;
+
+    //complete the pitch with lights
     active = pitching();
   }
 
@@ -129,6 +143,31 @@ void loop() {
   Serial.print("button: ");
   Serial.println(digitalRead(BUTTON_PIN));
 */
+}
+
+
+//blink lights while waiting for user to calibrate stepper motor position
+void calibrate(){
+  //blink red lights until user presses the button (indicating calibration done)
+  //first_press changes value inside interrupt
+  while(first_press == true){
+    pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
+    pixels.show();
+    delay(100);
+    if(first_press == false){
+      break;
+    }
+    pixels.clear();
+    pixels.show();
+    delay(100);
+  }
+
+  //turn lights off
+  pixels.clear();
+  pixels.show();
+
+  //move one step backwards (forward variable = backward rotation) to lock rotation
+  myMotor->step(1, FORWARD, DOUBLE);
 }
 
 
@@ -176,6 +215,7 @@ bool pitching(){
   
   //turn stepper motor 90 degrees
   myMotor->step(50, BACKWARD, DOUBLE);
+  //myMotor->release();
   pitchCount++;
 
   //if done, change to inactive
@@ -206,27 +246,42 @@ bool timingAnimation(){
 }
 
 
-//if the button is pressed, toggle the active variable
+//if the button is pressed
 void buttonPress(){
+  Serial.println("Button has been pressed.");
+  if(first_press == true){
+    first_press = false;
+    
+    //record the time at which the button was pressed
+    button_pressed = millis();
+  }
+  else{
+    activate();
+  }
+}
+
+
+//if the remote button is pressed
+void remotePress(){
+  Serial.println("Remote signal detected");
+  activate();
+}
+
+
+//flip the value of 'active' variable
+void activate(){
   //ignore interrupt if the button was pressed within the last half second (ignore double signals)
   if(millis() - button_pressed < 500){
     return;
   }
   button_pressed = millis();
-  Serial.println("Button has been pressed.");
   active = !active;
-}
-
-
-void remotePress(){
-  Serial.println("Remote signal detected");
-  buttonPress();
 }
 
 /*
  * Future tasks
- *  - add release() after each movement to catch the next baseball?
- *  - mess around with stepper motor speed (slower may catch a new baseball better)
+ *  - add release() after each movement to catch the next baseball? - needs user calibration, works for now (might user encoder later)
+ *  - mess around with stepper motor speed (slower may catch a new baseball better) - 20rpms seems better when plugged into wall
  *  - why is the remote control not always being detected? -- probably need remote with higher range (currently only 25 feet)
  *  - add fan
  *  - add a power switch
@@ -236,5 +291,4 @@ void remotePress(){
  *  - improve animation?
  *  - how bright do we want the light to be
  *  - add startup light show
- * /
  */
