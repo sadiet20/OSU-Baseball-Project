@@ -14,7 +14,6 @@ bool pitching();
 bool timingAnimation();
 void buttonPress();
 void remotePress();
-void activate();
 
 
 //VARIABLES
@@ -22,10 +21,6 @@ void activate();
 //button data
 #define BUTTON_PIN 2
 #define REMOTE_PIN 3
-
-//time since button was last pressed
-//used volatile so that we can edit it within an interrupt
-volatile unsigned long button_pressed = 0;
 
 //if the machine is being calibrated
 //volatile so it can be changed inside interrupt
@@ -74,6 +69,19 @@ long delayTime = 0;
 volatile bool active = false;
 
 
+//interrupt variables (volatile so that we can edit it within an interrupt)
+volatile bool remote_pressed;
+volatile bool button_pressed;
+
+//number of times remote/button have been pressed
+volatile unsigned int remote_count;
+volatile unsigned int button_count;
+
+//time since remote/button was last pressed
+volatile unsigned long remote_time = 0;
+volatile unsigned long button_time = 0;
+
+
 void setup() {
   //setup serial monitor at 9600 bps
   Serial.begin(9600);
@@ -104,6 +112,19 @@ void setup() {
 }
 
 void loop() {
+  
+  if(true == remote_pressed){
+    Serial.print("Remote signal (");
+    Serial.print(remote_count);
+    Serial.println(") detected");
+    remote_pressed = false;
+  }
+  if(true == button_pressed){
+    Serial.print("Button signal (");
+    Serial.print(button_count);
+    Serial.println(") detected");
+    button_pressed = false;
+  }
 
   //turn stepper motor maxPitches times (or until the off button is pressed)
   if (active == true && pitchCount!=MAX_PITCHES){
@@ -130,6 +151,7 @@ void loop() {
     pixels.show();
   }
 
+
 /*
   Serial.println();
   Serial.print("potVal: ");
@@ -150,11 +172,11 @@ void loop() {
 void calibrate(){
   //blink red lights until user presses the button (indicating calibration done)
   //first_press changes value inside interrupt
-  while(first_press == true){
+  while(true == first_press){
     pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
     pixels.show();
     delay(100);
-    if(first_press == false){
+    if(false == first_press){
       break;
     }
     pixels.clear();
@@ -246,36 +268,52 @@ bool timingAnimation(){
 }
 
 
-//if the button is pressed
+//flips the active status if the button is pressed
 void buttonPress(){
-  Serial.println("Button has been pressed.");
-  if(first_press == true){
+  if(true == button_pressed){
+    return;
+  }
+  
+  //first press indicates calibration is over
+  if(true == first_press){
     first_press = false;
     
     //record the time at which the button was pressed
-    button_pressed = millis();
+    button_time = millis();
   }
-  else{
-    activate();
+  //following presses indicate to flip the active status variable
+  //account for debounce by requiring 500 milliseconds to pass before considering a new press
+  else if(millis() - button_time > 500){
+    button_count++;
+    button_time = millis();
+    button_pressed = true;
+    
+    //flip the active variable
+    active = !active;   
   }
 }
 
 
 //if the remote button is pressed
 void remotePress(){
-  Serial.println("Remote signal detected");
-  activate();
-}
-
-
-//flip the value of 'active' variable
-void activate(){
-  //ignore interrupt if the button was pressed within the last half second (ignore double signals)
-  if(millis() - button_pressed < 500){
+  if(true == remote_pressed || true == first_press){
     return;
   }
-  button_pressed = millis();
-  active = !active;
+  
+  //account for debounce by requiring 200 milliseconds to pass before considering a new press
+  if(millis() - remote_time > 200){
+    //possibly change this to remote_count = (remote_count + 1) % 2; so that we only are storing 0 or 1
+    remote_count++;
+
+    //the rf receiver triggers the interrupt twice per press, so only act on every other press
+    if(remote_count % 2 == 1){
+      remote_time = millis();
+      remote_pressed = true;
+
+      //flip the active variable
+      active = !active;
+    }    
+  }
 }
 
 /*
@@ -285,6 +323,8 @@ void activate(){
  *  - why is the remote control not always being detected? -- probably need remote with higher range (currently only 25 feet)
  *  - add fan
  *  - add a power switch
+ *  - interrupts are being finicky with the calibration function (maybe clear interrupt flags after calibration? and change so calibration doesn't use interrupts?)
+ *  - disable interrupts when reading volatile variables?
  *  
  *  - how long should the starting delay be?
  *  - add capability for the users to set number of pitches? - don't worry about that for now
