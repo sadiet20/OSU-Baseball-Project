@@ -10,8 +10,8 @@
 //FUNCTION PROTOTYPES
 
 void calibrate();
-bool pitching();
-bool timingAnimation();
+void pitching();
+void timingAnimation();
 void buttonPress();
 void remotePress();
 
@@ -24,7 +24,7 @@ void remotePress();
 
 //if the machine is being calibrated
 //volatile so it can be changed inside interrupt
-volatile bool first_press = true;
+volatile bool first_press = false; //srt s/b true
 
 //potentiometer data
 #define POT_PIN 0
@@ -93,8 +93,8 @@ void setup() {
   pinMode(REMOTE_PIN, INPUT);
   
   //setup interrupt to toggle 'active' variable if the button is pressed
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, FALLING);
-  attachInterrupt(digitalPinToInterrupt(REMOTE_PIN), remotePress, RISING);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, FALLING); 
+  attachInterrupt(digitalPinToInterrupt(REMOTE_PIN), remotePress, RISING); 
   
   //initialize the stepper motor with speed 20RPMS
   AFMS.begin();
@@ -108,11 +108,13 @@ void setup() {
   pixels.show();
 
   //wait for user to calibrate stepper motor position
-  calibrate();
+  //calibrate(); srt
 }
 
 void loop() {
-  
+
+  //disable interrupts while we access volatile memory larger than 8 bits
+  noInterrupts();
   if(true == remote_pressed){
     Serial.print("Remote signal (");
     Serial.print(remote_count);
@@ -125,6 +127,7 @@ void loop() {
     Serial.println(") detected");
     button_pressed = false;
   }
+  interrupts();
 
   //turn stepper motor maxPitches times (or until the off button is pressed)
   if (active == true && pitchCount!=MAX_PITCHES){
@@ -141,7 +144,7 @@ void loop() {
     msBeforeLed = delayTime - 5000;
 
     //complete the pitch with lights
-    active = pitching();
+    pitching();
   }
 
   //clear lights and reset count if not pitching
@@ -194,10 +197,8 @@ void calibrate(){
 
 
 //executes one pitch with lights
-//if at any point 'active' changes to false, immediately returns false
-//if successful execution and not the last pitch, returns true
-bool pitching(){
-  bool cont;
+//if at any point 'active' changes to false, immediately returns
+void pitching(){
   
   //delay before first pitch and set LEDs to red
   if(pitchCount == 0){
@@ -205,7 +206,7 @@ bool pitching(){
     pixels.show();
     for(int i=0; i<100; i++){
       if(false == active){
-        return false;
+        return;
       }
       delay(STARTING_DELAY/100);
     }
@@ -214,21 +215,17 @@ bool pitching(){
   //delay before the 5-second animation
   for(int i=0; i<50; i++){
     if(false == active){
-      return false;
+      return;
     }
     delay(msBeforeLed/50);
   }
 
   //run light animation for the 5 seconds before pitching
-  cont = timingAnimation();
-
-  if(false == cont){
-    return false;
-  }
+  timingAnimation();
 
   //check again to make sure we haven't pressed the button
   if(false == active){
-    return false;
+    return;
   }
 
   //flash green right as we are pitching
@@ -248,23 +245,20 @@ bool pitching(){
   //refill with red
   pixels.fill(pixels.Color(BRIGHT, 0, 0), 0);
   pixels.show();
-
-  return active;
 }
 
 
 //5-second animation for timing
-//returns false if active goes to false or true if active stays true the entire time
-bool timingAnimation(){
+//returns if active goes to false
+void timingAnimation(){
   for(int i=0; i<NUM_PIXELS; i++){
     if(false == active){
-      return false;
+      return;
     }
     pixels.setPixelColor(i, pixels.Color((BRIGHT + BRIGHT/2), BRIGHT, 0));
     pixels.show();
     delay(MS_BETWEEN_LED);
   }
-  return true;
 }
 
 
