@@ -76,7 +76,7 @@ int pitchCount = 0;
 long delayTime = 0;
 
 //wait 5 seconds before starting pitching
-#define STARTING_DELAY 5*1000;    //performance version is 60 seconds
+#define STARTING_DELAY 5*1000    //performance version is 60 seconds
 
 //currently throwing pitches
 //must be volatile so that it can be altered inside interrupt
