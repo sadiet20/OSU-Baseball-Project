@@ -1,3 +1,17 @@
+/***********************************************************
+ * Authors: Sadie Thomas and Alex Prestwich
+ * Description: Rotates a motor to release baseballs into 
+ *    pitching machine based on button/rf input and 
+ *    coordinates LED indicator lights
+ * Inputs: potentiometer, button, rf signals
+ * Outputs: Serial prints, LED sequences, motor rotation
+ * Components: Arduino Uno, Adafruit MotorShield, NEMA 17 
+ *    stepper motor, Adafruit Neopixel LED strip, 
+ *    momentary rf reciever/emitter, 10K ohm potentiometer, 
+ *    momentary button
+ * Date: 1/22/2022
+ ***********************************************************/
+
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 
@@ -24,7 +38,7 @@ void remotePress();
 
 //if the machine is being calibrated
 //volatile so it can be changed inside interrupt
-volatile bool first_press = false; //srt s/b true
+volatile bool first_press = true;
 
 //potentiometer data
 #define POT_PIN 0
@@ -61,8 +75,8 @@ int pitchCount = 0;
 //time in between pitches
 long delayTime = 0;
 
-//time to wait before starting pitching
-#define STARTING_DELAY 0    //30*1000;
+//wait 5 seconds before starting pitching
+#define STARTING_DELAY 5*1000;    //performance version is 60 seconds
 
 //currently throwing pitches
 //must be volatile so that it can be altered inside interrupt
@@ -98,8 +112,6 @@ void setup() {
   
   //initialize the stepper motor with speed 20RPMS
   AFMS.begin();
-  //myMotor->setSpeed(100); check if this is the max speed?
-  //myMotor->step(25, FORWARD, DOUBLE);
   myMotor->setSpeed(20);
 
   //initilize NeoPixel strip object
@@ -108,7 +120,7 @@ void setup() {
   pixels.show();
 
   //wait for user to calibrate stepper motor position
-  //calibrate(); srt
+  calibrate(); 
 }
 
 void loop() {
@@ -150,24 +162,10 @@ void loop() {
   //clear lights and reset count if not pitching
   if(false == active){
     pitchCount = 0;
-    pixels.clear();
+    pixels.fill(pixels.Color(BRIGHT/4, BRIGHT/4, BRIGHT/4), 0);
     pixels.show();
   }
 
-
-/*
-  Serial.println();
-  Serial.print("potVal: ");
-  Serial.println(potVal);
-  Serial.print("delay: ");
-  Serial.println(delayTime);
-  Serial.print("active: ");
-  Serial.println(active);
-  Serial.print("pitch count: ");
-  Serial.println(pitchCount);
-  Serial.print("button: ");
-  Serial.println(digitalRead(BUTTON_PIN));
-*/
 }
 
 
@@ -234,7 +232,6 @@ void pitching(){
   
   //turn stepper motor 90 degrees
   myMotor->step(50, BACKWARD, DOUBLE);
-  //myMotor->release();
   pitchCount++;
 
   //if done, change to inactive
@@ -294,8 +291,8 @@ void remotePress(){
     return;
   }
   
-  //account for debounce by requiring 200 milliseconds to pass before considering a new press
-  if(millis() - remote_time > 200){
+  //account for debounce by requiring 500 milliseconds to pass before considering a new press
+  if(millis() - remote_time > 500){
     //possibly change this to remote_count = (remote_count + 1) % 2; so that we only are storing 0 or 1
     remote_count++;
 
@@ -311,16 +308,11 @@ void remotePress(){
 }
 
 /*
- * Future tasks
- *  - add release() after each movement to catch the next baseball? - needs user calibration, works for now (might user encoder later)
+ * Future possibilities
+ *  - add release() after each movement to catch the next baseball? - needs user calibration, works for now (might use encoder later)
  *  - mess around with stepper motor speed (slower may catch a new baseball better) - 20rpms seems better when plugged into wall
- *  - why is the remote control not always being detected? -- probably need remote with higher range (currently only 25 feet)
- *  - add fan
  *  - add a power switch
- *  - interrupts are being finicky with the calibration function (maybe clear interrupt flags after calibration? and change so calibration doesn't use interrupts?)
- *  - disable interrupts when reading volatile variables?
- *  
- *  - how long should the starting delay be?
+
  *  - add capability for the users to set number of pitches? - don't worry about that for now
  *  - improve animation?
  *  - how bright do we want the light to be
