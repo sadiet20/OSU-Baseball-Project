@@ -206,7 +206,7 @@ void pitching(){
       if(false == active){
         return;
       }
-      delay(STARTING_DELAY/100);
+      delay(((unsigned long) STARTING_DELAY)/100);
     }
   }
 
