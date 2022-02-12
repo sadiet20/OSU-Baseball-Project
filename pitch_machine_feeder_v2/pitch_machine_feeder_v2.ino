@@ -61,10 +61,10 @@ float msBeforeLed = 0;
 Adafruit_NeoPixel pixels(NUM_PIXELS, LED_PIN);
 
 
-//create stepper motor with 200 steps per revolution on port 2
+//create stepper motor with 200 steps per revolution on port 1
 //M1 and M2 go to port 1, M3 and M4 go to port 2
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 2);
+Adafruit_StepperMotor *myMotor = AFMS.getStepper(200, 1);
 
 //number of baseballs the device holds
 #define MAX_PITCHES 10
