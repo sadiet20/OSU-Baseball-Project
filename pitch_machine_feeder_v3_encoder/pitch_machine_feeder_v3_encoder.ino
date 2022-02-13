@@ -58,10 +58,11 @@ float ms_before_led = 0;
 Adafruit_NeoPixel pixels(NUM_PIXELS, LED_PIN);
 
 
-//create stepper motor with 360 steps per revolution on port 1
+//create stepper motor with 200 steps per revolution on port 1
+//our stepper motor is designed for 200 steps per revoultion
 //M1 and M2 go to port 1, M3 and M4 go to port 2
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_StepperMotor* my_motor = AFMS.getStepper(360, 1);
+Adafruit_StepperMotor* my_motor = AFMS.getStepper(200, 1);
 
 //number of baseballs the device holds
 #define MAX_PITCHES 10
@@ -220,7 +221,7 @@ void pitching(){
   pixels.show();
   
   //turn stepper motor 90 degrees, accounting for over-rotated cam
-  my_motor->step(90-deg_over_rotated, BACKWARD, DOUBLE);
+  my_motor->step(50-deg_over_rotated, BACKWARD, DOUBLE);
   pitch_count++;
 
   //if done, change to inactive
