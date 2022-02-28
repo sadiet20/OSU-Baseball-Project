@@ -5,6 +5,7 @@
  *    coordinates LED indicator lights
  * Inputs: potentiometer, button, rf signals
  * Outputs: Serial prints, LED sequences, motor rotation
+ * References: Encoder code - Curious Scientist
  * Components: Arduino Uno, Adafruit MotorShield, NEMA 17 
  *    stepper motor, Adafruit Neopixel LED strip, 
  *    momentary rf reciever/emitter, 10K ohm potentiometer, 
@@ -12,7 +13,7 @@
  * Date: 2/12/2022
  ***********************************************************/
 
-#include <Wire.h>
+#include <Wire.h>     // for encoder
 #include <Adafruit_MotorShield.h>
 
 #include <Adafruit_NeoPixel.h>
@@ -24,6 +25,7 @@
 //FUNCTION PROTOTYPES
 
 void calibrate();
+void checkMagnetPosition();
 void pitching();
 void adjustRotation();
 void timingAnimation();
@@ -80,8 +82,17 @@ long delay_time = 0;
 //must be volatile so that it can be altered inside interrupt
 volatile bool active = false;
 
-//number of degrees the cam is over-rotated
-int deg_over_rotated = 0;
+//number of degrees to rotate the cam
+int turn_distance = 50;
+
+
+//encoder variables
+//first quadrant angle indicating correct cam positioning
+//value between 0 and 50 degrees since 200 is a full rotation
+#define UPRIGHT 0
+
+//current angle of cam (from 0 to 200)
+int cur_angle;
 
 
 //interrupt variables (volatile so that we can edit it within an interrupt)
@@ -100,6 +111,7 @@ volatile unsigned long button_time = 0;
 void setup() {
   //setup serial monitor at 9600 bps
   Serial.begin(9600);
+  while(!Serial);
   Serial.println("START AUTOMATED BASEBALL FEEDER");
 
   //setup input button
@@ -120,7 +132,11 @@ void setup() {
   pixels.clear();
   pixels.show();
 
-  //wait for user to calibrate stepper motor position
+  //initialize encoder communication
+  Wire.begin();             //start i2C  
+  Wire.setClock(800000L);   //fast clock
+
+  //calibrate stepper motor to upright position
   calibrate(); 
 }
 
@@ -172,12 +188,104 @@ void loop() {
 
 //get reading from encoder and move stepper motor backwards to align on axis
 void calibrate(){
-  int deg;
-  //srt get encoder reading
-  //do math to figure out how many degrees to rotate
+  int correction;
 
-  //move backwards to align on an axis (forward variable = backward rotation) and lock rotation
-  my_motor->step(deg, FORWARD, DOUBLE);
+  //verify encoder setup and get current angle
+  checkMagnetPosition();
+  getAngle();
+
+  //correct to the previous 90 degree axis (90 degrees == 50 on stepper)
+  correction = (cur_angle - UPRIGHT) % 50;
+  if(correction < 0){         //adjust if negative
+    correction += 50;
+  }
+
+  //move backwards to align on an axis (forward variable == backward rotation) and lock rotation
+  my_motor->step(correction, FORWARD, DOUBLE);
+}
+
+
+//verify encoder magnet positioned correctly 
+void checkMagnetPosition(){
+  int first_attempt = 1;
+  int magnet_status = 0;
+  
+  //Status register output: 0 0 MD ML MH 0 0 0  
+  //MH: Too strong magnet - 100111 - DEC: 39 
+  //ML: Too weak magnet - 10111 - DEC: 23     
+  //MD: OK magnet - 110111 - DEC: 55
+  
+  //while magnet is not positioned at the proper distance (32 == MD set to 1)
+  while((magnet_status & 32) != 32){
+    //reset status
+    magnet_status = 0;
+
+    //ask for status values from MD, ML, and MH
+    Wire.beginTransmission(0x36);   //connect to the sensor
+    Wire.write(0x0B);               //figure 21 - register map: Status: MD ML MH
+    Wire.endTransmission();         //end transmission
+    Wire.requestFrom(0x36, 1);      //request data from the sensor
+
+    //read data when it becomes available
+    while(Wire.available() == 0);
+    magnet_status = Wire.read();
+
+    //give error indicator if failed
+    if(((magnet_status & 32) != 32) && (first_attempt == 1)){
+      Serial.print("Magnet positioning invalid. Magnet status: ");
+      Serial.println(magnet_status, BIN);
+      pixels.fill(pixels.Color(BRIGHT, BRIGHT/4, 0), 0);      //orangle lights indicate encoder magnet positioning error
+      pixels.show();
+      first_attempt = 0;
+    }
+  }
+  
+  Serial.println("Encoder magnet found!");
+  pixels.clear();
+  pixels.show();
+}
+
+
+//get shaft angle position from encoder
+void getAngle(){  
+  int deg;  //srt for testing only
+  int low_byte;
+  int high_byte;
+  int angle_raw;
+  
+  //get bits 0-7 of raw angle
+  Wire.beginTransmission(0x36); //connect to the sensor
+  Wire.write(0x0D);             //figure 21 - register map: Raw angle (7:0)
+  Wire.endTransmission();       //end transmission
+  Wire.requestFrom(0x36, 1);    //request data from the sensor
+
+  //read data when it becomes available
+  while(Wire.available() == 0);
+  low_byte = Wire.read();
+ 
+  //get bits 8-11 of raw angle
+  Wire.beginTransmission(0x36); //connect to the sensor
+  Wire.write(0x0C);             //figure 21 - register map: Raw angle (11:8)
+  Wire.endTransmission();       //end transmission
+  Wire.requestFrom(0x36, 1);    //request data from the sensor
+  
+  while(Wire.available() == 0);  
+  high_byte = Wire.read();
+
+  //need to combine the low and high bytes into one 12-bit number
+  //therefore, must shift the high byte 8 bits to the left
+  high_byte = high_byte << 8;
+
+  //combine low and high bytes
+  angle_raw = high_byte | low_byte;
+
+  //map angle to 200 degree rotation
+  cur_angle = map(angle_raw, 0, 4096, 0, 200);
+
+  //srt testing
+  deg = map(angle_raw, 0, 4096, 0, 360);    
+  Serial.print("Current location in degrees: ");
+  Serial.println(deg);
 }
 
 
@@ -206,7 +314,8 @@ void pitching(){
   }
 
   //adjust amount to be rotated based on position of cam
-  adjustRotation();
+  getAngle();
+  turn_distance = 50 - (cur_angle % 50);
 
   //run light animation for the 5 seconds before pitching
   timingAnimation();
@@ -221,7 +330,7 @@ void pitching(){
   pixels.show();
   
   //turn stepper motor 90 degrees, accounting for over-rotated cam
-  my_motor->step(50-deg_over_rotated, BACKWARD, DOUBLE);
+  my_motor->step(turn_distance, BACKWARD, DOUBLE);
   pitch_count++;
 
   //if done, change to inactive
@@ -246,13 +355,6 @@ void timingAnimation(){
     pixels.show();
     delay(MS_BETWEEN_LED);
   }
-}
-
-
-void adjustRotation(){
-  //srt read value from encoder
-  //do math to figure out how many degrees it is off
-  //set deg_over_rotated (positive = over-rotated, negative = under-rotated)
 }
 
 
