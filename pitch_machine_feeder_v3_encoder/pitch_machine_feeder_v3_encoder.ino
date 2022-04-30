@@ -89,7 +89,7 @@ int turn_distance = 50;
 //encoder variables
 //first quadrant angle indicating correct cam positioning
 //value between 0 and 50 degrees since 200 is a full rotation
-#define UPRIGHT 0
+#define UPRIGHT 35
 
 //current angle of cam (from 0 to 200)
 int cur_angle;
@@ -195,7 +195,7 @@ void calibrate(){
   getAngle();
 
   //correct to the previous 90 degree axis (90 degrees == 50 on stepper)
-  correction = (cur_angle - UPRIGHT) % 50;
+  correction = cur_angle % 50;
   if(correction < 0){         //adjust if negative
     correction += 50;
   }
@@ -293,7 +293,10 @@ void getAngle(){
   angle_raw = high_byte | low_byte;
 
   //map angle to 200 degree rotation (reverse so that encoder direction matches stepper direction)
-  cur_angle = map(angle_raw, 0, 4096, 200, 0);
+  cur_angle = map(angle_raw, 0, 4096, 200, 0) - UPRIGHT;
+  if(cur_angle < 0){
+    cur_angle += 50;
+  }
 
   //srt testing  
   Serial.print("Current location: ");
