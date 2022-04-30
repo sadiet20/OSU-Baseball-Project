@@ -4,6 +4,12 @@
  * Modified by: Sadie Thomas
  */
 
+ /*
+  * srt remove
+  * orange -- A4 -- SDA
+  * yellow -- A5 -- SCL
+  */
+
 #include <Wire.h> //This is for i2C
 
 //float serialTimer = 0; //Timer for the message refresh
@@ -35,7 +41,11 @@ void setup()
   Wire.begin(); //start i2C  
   Wire.setClock(800000L); //fast clock
 
+  Serial.println("Checking Magnet presence");
+  
   checkMagnetPresence(); //check the magnet (blocks until magnet is found)
+
+  Serial.println("Magnet identified");
 
   ReadRawAngle(); //make a reading so the degAngle gets updated
   startAngle = degAngle; //update startAngle with degAngle - for taring
@@ -173,6 +183,7 @@ void checkQuadrant()
   totalAngle = (numberofTurns*360) + correctedAngle; //number of turns (+/-) plus the actual angle within the 0-360 range
   Serial.print("Total angle: ");
   Serial.println(totalAngle, 2); //absolute position of the motor expressed in degree angles, 2 digits
+  Serial.println("------------------------");
 }
 
 void checkMagnetPresence()
@@ -182,13 +193,18 @@ void checkMagnetPresence()
   while((magnetStatus & 32) != 32) //while the magnet is not adjusted to the proper distance - 32: MD = 1
   {
     magnetStatus = 0; //reset reading
-
+    Serial.println("transmission begin");
     Wire.beginTransmission(0x36); //connect to the sensor
+    Serial.println("transmission 1");
     Wire.write(0x0B); //figure 21 - register map: Status: MD ML MH
+    Serial.println("transmission 2");
     Wire.endTransmission(); //end transmission
+    Serial.println("transmission 3");
     Wire.requestFrom(0x36, 1); //request from the sensor
 
+    Serial.println("waiting for wire");
     while(Wire.available() == 0); //wait until it becomes available 
+    Serial.println("after wire wait");
     magnetStatus = Wire.read(); //Reading the data after the request
 
     Serial.print("Magnet status: ");
