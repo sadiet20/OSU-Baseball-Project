@@ -10,7 +10,7 @@
  *    stepper motor, Adafruit Neopixel LED strip, 
  *    momentary rf reciever/emitter, 10K ohm potentiometer, 
  *    momentary button
- * Date: 2/12/2022
+ * Date: 4/30/2022
  ***********************************************************/
 
 #include <Wire.h>     // for encoder
@@ -93,7 +93,7 @@ int turn_distance = 50;
 
 //current angle of cam (from 0 to 200)
 int cur_angle;
-
+int starting_angle;
 
 //interrupt variables (volatile so that we can edit it within an interrupt)
 volatile bool remote_pressed;
@@ -137,7 +137,7 @@ void setup() {
   Wire.setClock(800000L);   //fast clock
 
   //calibrate stepper motor to upright position
-  calibrate(); 
+  calibrate();
 }
 
 void loop() {
@@ -200,8 +200,22 @@ void calibrate(){
     correction += 50;
   }
 
+  //srt consider correction < 5
+  if(correction == 0){
+    //move backwards to align on an axis (forward variable == backward rotation) and lock rotation
+    my_motor->step(1, FORWARD, DOUBLE);
+    return;
+  }
+ 
+  Serial.print("correction angle (200): ");
+  Serial.println(correction);
+
   //move backwards to align on an axis (forward variable == backward rotation) and lock rotation
   my_motor->step(correction, FORWARD, DOUBLE);
+
+  //srt testing
+  Serial.println("New location after calibration: ");
+  getAngle();
 }
 
 
@@ -248,7 +262,6 @@ void checkMagnetPosition(){
 
 //get shaft angle position from encoder
 void getAngle(){  
-  int deg;  //srt for testing only
   int low_byte;
   int high_byte;
   int angle_raw;
@@ -279,13 +292,13 @@ void getAngle(){
   //combine low and high bytes
   angle_raw = high_byte | low_byte;
 
-  //map angle to 200 degree rotation
-  cur_angle = map(angle_raw, 0, 4096, 0, 200);
+  //map angle to 200 degree rotation (reverse so that encoder direction matches stepper direction)
+  cur_angle = map(angle_raw, 0, 4096, 200, 0);
 
-  //srt testing
-  deg = map(angle_raw, 0, 4096, 0, 360);    
-  Serial.print("Current location in degrees: ");
-  Serial.println(deg);
+  //srt testing  
+  Serial.print("Current location: ");
+  Serial.print(cur_angle);
+  Serial.println(" degrees (out of 200)");
 }
 
 
@@ -313,12 +326,25 @@ void pitching(){
     delay(ms_before_led/50);
   }
 
-  //adjust amount to be rotated based on position of cam
-  getAngle();
-  turn_distance = 50 - (cur_angle % 50);
-
   //run light animation for the 5 seconds before pitching
   timingAnimation();
+    
+  //adjust amount to be rotated based on position of cam
+  getAngle();
+  
+  //move 50, less however much cam has over-rotated
+  turn_distance = 50 - (cur_angle % 50);
+
+  //if turn distance is less than 10, cam likely got pushed backwards, so need to move extra
+  if(turn_distance < 10){
+    turn_distance += 50;
+  }
+
+  //srt testing
+  Serial.print("Turning:");
+  Serial.print(turn_distance);
+  Serial.println(" degrees (out of 200)");
+  Serial.println("-------------------");
 
   //check again to make sure we haven't pressed the button
   if(false == active){
@@ -400,7 +426,6 @@ void remotePress(){
 
 /*
  * Future possibilities
- *  - add release() after each movement to catch the next baseball? - needs user calibration, works for now (might use encoder later)
  *  - mess around with stepper motor speed (slower may catch a new baseball better) - 20rpms seems better when plugged into wall
  *  - add a power switch
 
