@@ -26,6 +26,7 @@
 
 void calibrate();
 void checkMagnetPosition();
+void calcDelayTime();
 void pitching();
 void adjustRotation();
 void timingAnimation();
@@ -111,7 +112,7 @@ volatile unsigned long button_time = 0;
 void setup() {
   //setup serial monitor at 9600 bps
   Serial.begin(9600);
-  while(!Serial);
+  //while(!Serial);
   Serial.println("START AUTOMATED BASEBALL FEEDER");
 
   //setup input button
@@ -160,17 +161,9 @@ void loop() {
 
   //turn stepper motor maxPitches times (or until the off button is pressed)
   if (active == true && pitch_count!=MAX_PITCHES){
-    
-    //read potentiometer value
-    pot_val = analogRead(POT_PIN);
-    //convert analog (0-1023) to digital (0-255)
-    pot_val = map(pot_val, 0, 1023, 0, 255);
-  
+
     //calculate the delay time to be between 5 and 10 seconds (depending on where the potentiometer is set)
-    delay_time = pot_val*(1000)/51 + 5000;
-  
-    //LED animation starts with 5 seconds remaining until pitch
-    ms_before_led = delay_time - 5000;
+    calcDelayTime();
 
     //complete the pitch with lights
     pitching();
@@ -302,6 +295,36 @@ void getAngle(){
   Serial.print("Current location: ");
   Serial.print(cur_angle);
   Serial.println(" degrees (out of 200)");
+}
+
+
+//calculate delay time between pitches based on poteniometer value
+void calcDelayTime(){    
+  //read potentiometer value
+  pot_val = analogRead(POT_PIN);
+
+  //potentiometer has non-linear mapping, so hardcode cutoffs
+  if(pot_val <= 40){
+    delay_time = map(pot_val, 0, 40, 5000, 6000);
+  }
+  else if(pot_val <= 125){
+    delay_time = map(pot_val, 40, 125, 6000, 7000);
+  }
+  else if(pot_val <= 280){
+    delay_time = map(pot_val, 125, 280, 7000, 8000);
+  }
+  else if(pot_val <= 715){
+    delay_time = map(pot_val, 280, 715, 8000, 9000);
+  }
+  else{
+    delay_time = map(pot_val, 715, 1023, 9000, 10000);
+  }
+
+  Serial.print("Potentiometer delay time: ");
+  Serial.println(delay_time);
+
+  //LED animation starts with 5 seconds remaining until pitch
+  ms_before_led = delay_time - 5000;
 }
 
 
