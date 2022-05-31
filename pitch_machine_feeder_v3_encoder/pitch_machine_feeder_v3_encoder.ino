@@ -1,3 +1,4 @@
+
 /***********************************************************
  * Authors: Sadie Thomas and Alex Prestwich
  * Description: Rotates a motor to release baseballs into 
@@ -10,7 +11,7 @@
  *    stepper motor, Adafruit Neopixel LED strip, 
  *    momentary rf reciever/emitter, 10K ohm potentiometer, 
  *    momentary button
- * Date: 4/30/2022
+ * Date: 5/28/2022
  ***********************************************************/
 
 #include <Wire.h>     // for encoder
@@ -65,7 +66,7 @@ Adafruit_NeoPixel pixels(NUM_PIXELS, LED_PIN);
 //our stepper motor is designed for 200 steps per revoultion
 //M1 and M2 go to port 1, M3 and M4 go to port 2
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_StepperMotor* my_motor = AFMS.getStepper(200, 1);
+Adafruit_StepperMotor* my_motor = AFMS.getStepper(200, 2);
 
 //number of baseballs the device holds
 #define MAX_PITCHES 10
@@ -130,7 +131,7 @@ void setup() {
 
   //initilize NeoPixel strip object
   pixels.begin();
-  pixels.clear();
+  pixels.fill(pixels.Color(BRIGHT/4, 0, BRIGHT/4), 0);
   pixels.show();
 
   //initialize encoder communication
@@ -226,7 +227,7 @@ void checkMagnetPosition(){
   while((magnet_status & 32) != 32){
     //reset status
     magnet_status = 0;
-
+    
     //ask for status values from MD, ML, and MH
     Wire.beginTransmission(0x36);   //connect to the sensor
     Wire.write(0x0B);               //figure 21 - register map: Status: MD ML MH
@@ -258,7 +259,7 @@ void getAngle(){
   int low_byte;
   int high_byte;
   int angle_raw;
-  
+
   //get bits 0-7 of raw angle
   Wire.beginTransmission(0x36); //connect to the sensor
   Wire.write(0x0D);             //figure 21 - register map: Raw angle (7:0)
