@@ -116,6 +116,11 @@ void setup() {
   //while(!Serial);
   Serial.println("START AUTOMATED BASEBALL FEEDER");
 
+  //initilize NeoPixel strip object
+  pixels.begin();
+  pixels.fill(pixels.Color(BRIGHT/4, 0, BRIGHT/4), 0);    //lights are purple until initialization done
+  pixels.show();
+
   //setup input button
   //high==on==pressed low==off==not pressed
   pinMode(BUTTON_PIN, INPUT);
@@ -128,11 +133,6 @@ void setup() {
   //initialize the stepper motor with speed 20RPMS
   AFMS.begin();
   my_motor->setSpeed(20);
-
-  //initilize NeoPixel strip object
-  pixels.begin();
-  pixels.fill(pixels.Color(BRIGHT/4, 0, BRIGHT/4), 0);
-  pixels.show();
 
   //initialize encoder communication
   Wire.begin();             //start i2C  
@@ -242,8 +242,6 @@ void checkMagnetPosition(){
     if(((magnet_status & 32) != 32) && (first_attempt == 1)){
       Serial.print("Magnet positioning invalid. Magnet status: ");
       Serial.println(magnet_status, BIN);
-      pixels.fill(pixels.Color(BRIGHT, BRIGHT/4, 0), 0);      //orangle lights indicate encoder magnet positioning error
-      pixels.show();
       first_attempt = 0;
     }
   }
